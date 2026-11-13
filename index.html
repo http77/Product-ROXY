@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>My Stock Manager</title>
+  <style>
+    :root { --bg:#f4f6fb; --card:#fff; --text:#172033; --muted:#687386; --primary:#2563eb; --danger:#dc2626; --border:#e5e9f2; }
+    * { box-sizing:border-box; }
+    body { margin:0; font-family:system-ui,-apple-system,"Segoe UI",sans-serif; background:var(--bg); color:var(--text); }
+    header { background:#111827; color:white; padding:22px 16px; text-align:center; }
+    header h1 { margin:0 0 6px; font-size:24px; }
+    header p { margin:0; color:#cbd5e1; font-size:14px; }
+    main { width:min(1000px,94%); margin:22px auto 40px; }
+    .summary { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; margin-bottom:18px; }
+    .stat,.panel,.product { background:var(--card); border:1px solid var(--border); border-radius:14px; padding:16px; box-shadow:0 3px 12px #17203308; }
+    .stat small { color:var(--muted); display:block; }
+    .stat strong { font-size:26px; display:block; margin-top:5px; }
+    h2 { font-size:18px; margin:0 0 14px; }
+    form { display:grid; grid-template-columns:1fr; gap:10px; }
+    input,select,button { font:inherit; border-radius:9px; padding:11px 12px; }
+    input,select { width:100%; border:1px solid #d6dce8; background:white; color:var(--text); }
+    button { border:0; cursor:pointer; font-weight:600; }
+    .primary { background:var(--primary); color:white; }
+    .secondary { background:#eaf0ff; color:#1d4ed8; }
+    .danger { background:#fee2e2; color:#b91c1c; }
+    .muted { color:var(--muted); font-size:13px; }
+    .size-inputs { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; }
+    .size-inputs label { font-size:12px; color:var(--muted); }
+    .size-inputs input { margin-top:4px; }
+    .products { display:grid; gap:14px; margin-top:16px; }
+    .product-head { display:flex; justify-content:space-between; align-items:flex-start; gap:10px; }
+    .product-name { font-size:18px; font-weight:700; overflow-wrap:anywhere; }
+    .total-pill { background:#eef2ff; color:#3730a3; padding:5px 9px; border-radius:99px; font-size:13px; white-space:nowrap; }
+    .stock-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(75px,1fr)); gap:8px; margin:14px 0; }
+    .size-box { background:#f8fafc; border:1px solid var(--border); border-radius:10px; text-align:center; padding:9px 5px; }
+    .size-box b { display:block; font-size:17px; }
+    .size-box small { color:var(--muted); font-size:12px; }
+    .sell-row { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+    .sell-row button { grid-column:1/-1; }
+    .empty { text-align:center; padding:28px 12px; color:var(--muted); background:white; border:1px dashed #cbd5e1; border-radius:12px; }
+    .product-actions { display:flex; gap:8px; margin-top:12px; }
+    .product-actions button { flex:1; }
+    .note { margin-top:12px; color:var(--muted); font-size:12px; line-height:1.6; }
+    @media(min-width:650px) {
+      .summary { grid-template-columns:repeat(3,1fr); }
+      form { grid-template-columns:1fr; }
+      .size-inputs { grid-template-columns:repeat(6,1fr); }
+      .sell-row { grid-template-columns:1fr 1fr auto; }
+      .sell-row button { grid-column:auto; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>📦 My Stock Manager</h1>
+    <p>সহজে প্রোডাক্ট ও সাইজ অনুযায়ী স্টক হিসাব রাখুন</p>
+  </header>
+
+  <main>
+    <section class="summary">
+      <div class="stat"><small>মোট প্রোডাক্ট</small><strong id="productCount">0</strong></div>
+      <div class="stat"><small>মোট স্টক (পিস)</small><strong id="stockCount">0</strong></div>
+      <div class="stat"><small>মোট বিক্রি (পিস)</small><strong id="soldCount">0</strong></div>
+    </section>
+
+    <section class="panel">
+      <h2>➕ Add Product</h2>
+      <form id="addForm">
+        <input id="productName" placeholder="প্রোডাক্টের নাম (যেমন: Formal Pant)" required maxlength="100" />
+        <div class="size-inputs" id="sizeInputs"></div>
+        <button class="primary" type="submit">প্রোডাক্ট যোগ করুন</button>
+      </form>
+      <p class="note">যে সাইজে স্টক আছে, শুধু সেই সাইজের পরিমাণ লিখুন। ০ বা খালি রাখলে স্টক যোগ হবে না।</p>
+    </section>
+
+    <section style="margin-top:22px">
+      <h2>📋 Product List</h2>
+      <div id="products" class="products"></div>
+    </section>
+  </main>
+
+  <script>
+    const SIZES = ["S", "M", "L", "XL", "XXL", "XXXL"];
+    const STORAGE_KEY = "my_stock_manager_v1";
+    let products = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
+
+    const sizeInputs = document.getElementById("sizeInputs");
+    SIZES.forEach(size => {
+      const label = document.createElement("label");
+      label.innerHTML = `${size}<input type="number" min="0" step="1" value="0" id="qty-${size}" inputmode="numeric">`;
+      sizeInputs.appendChild(label);
+    });
+
+    function save() {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(products));
+      render();
+    }
+    function totalOf(product) {
+      return Object.values(product.stock).reduce((sum, qty) => sum + qty, 0);
+    }
+    function render() {
+      const totalStock = products.reduce((sum, p) => sum + totalOf(p), 0);
+      const totalSold = products.reduce((sum, p) => sum + p.sold, 0);
+      document.getElementById("productCount").textContent = products.length;
+      document.getElementById("stockCount").textContent = totalStock;
+      document.getElementById("soldCount").textContent = totalSold;
+
+      const container = document.getElementById("products");
+      container.innerHTML = "";
+      if (!products.length) {
+        container.innerHTML = '<div class="empty">এখনো কোনো প্রোডাক্ট যোগ করা হয়নি। উপরের ফর্ম থেকে যোগ করুন।</div>';
+        return;
+      }
+
+      products.forEach(product => {
+        const card = document.createElement("article");
+        card.className = "product";
+        const total = totalOf(product);
+        const stockBoxes = SIZES.map(size => `
+          <div class="size-box"><small>${size}</small><b>${product.stock[size] || 0}</b><small>পিস</small></div>
+        `).join("");
+        const options = SIZES.map(size => `<option value="${size}">${size} (স্টক: ${product.stock[size] || 0})</option>`).join("");
+
+        card.innerHTML = `
+          <div class="product-head">
+            <div class="product-name"></div>
+            <span class="total-pill">মোট ${total} পিস</span>
+          </div>
+          <div class="stock-grid">${stockBoxes}</div>
+          <div class="sell-row">
+            <select class="sellSize" aria-label="সাইজ নির্বাচন">${options}</select>
+            <input class="sellQty" type="number" min="1" step="1" value="1" aria-label="বিক্রির পরিমাণ" />
+            <button class="primary sellBtn">Sell / বিক্রি</button>
+          </div>
+          <div class="muted" style="margin-top:8px">মোট বিক্রি হয়েছে: ${product.sold} পিস</div>
+          <div class="product-actions">
+            <button class="secondary editBtn">স্টক যোগ / Edit</button>
+            <button class="danger deleteBtn">Delete</button>
+          </div>
+        `;
+        card.querySelector(".product-name").textContent = product.name;
+
+        card.querySelector(".sellBtn").addEventListener("click", () => {
+          const size = card.querySelector(".sellSize").value;
+          const qty = Number(card.querySelector(".sellQty").value);
+          if (!Number.isInteger(qty) || qty < 1) return alert("বিক্রির পরিমাণ ১ বা তার বেশি পূর্ণ সংখ্যা দিন।");
+          if ((product.stock[size] || 0) < qty) return alert(`${size} সাইজে পর্যাপ্ত স্টক নেই!`);
+          product.stock[size] -= qty;
+          product.sold += qty;
+          save();
+        });
+
+        card.querySelector(".editBtn").addEventListener("click", () => {
+          const size = prompt("কোন সাইজে স্টক যোগ করবেন? (S, M, L, XL, XXL, XXXL)");
+          if (size === null) return;
+          const normalized = size.trim().toUpperCase();
+          if (!SIZES.includes(normalized)) return alert("সঠিক সাইজ লিখুন।");
+          const qtyText = prompt(`${normalized} সাইজে কত পিস যোগ করবেন?`);
+          if (qtyText === null) return;
+          const qty = Number(qtyText);
+          if (!Number.isInteger(qty) || qty < 1) return alert("১ বা তার বেশি পূর্ণ সংখ্যা দিন।");
+          product.stock[normalized] = (product.stock[normalized] || 0) + qty;
+          save();
+        });
+
+        card.querySelector(".deleteBtn").addEventListener("click", () => {
+          if (confirm(`"${product.name}" ডিলিট করবেন?`)) {
+            products = products.filter(p => p.id !== product.id);
+            save();
+          }
+        });
+        container.appendChild(card);
+      });
+    }
+
+    document.getElementById("addForm").addEventListener("submit", event => {
+      event.preventDefault();
+      const name = document.getElementById("productName").value.trim();
+      if (!name) return;
+      const stock = {};
+      SIZES.forEach(size => {
+        const qty = Number(document.getElementById(`qty-${size}`).value || 0);
+        if (!Number.isInteger(qty) || qty < 0) return alert(`${size} সাইজের সঠিক পরিমাণ দিন।`);
+        stock[size] = qty;
+      });
+      if (Object.values(stock).every(q => q === 0)) return alert("কমপক্ষে একটি সাইজে স্টক দিন।");
+      products.push({ id: Date.now().toString(), name, stock, sold: 0 });
+      save();
+      event.target.reset();
+      SIZES.forEach(size => document.getElementById(`qty-${size}`).value = 0);
+    });
+
+    render();
+  </script>
+</body>
+</html>
